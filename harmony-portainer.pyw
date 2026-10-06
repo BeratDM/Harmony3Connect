@@ -17,6 +17,8 @@ SSH_HOST = "harmony3-portainer"
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 19443
 
+SSH_KEY = r"$env:USERPROFILE\.ssh\harmony3_vps"
+
 STARTUP_TIMEOUT = 10
 CHECK_INTERVAL = 0.2
 
@@ -110,13 +112,147 @@ def terminate_process(process):
 
 
 # ============================================================
+# SSH Agent helpers
+# ============================================================
+
+def is_ssh_agent_running():
+    """
+    Check whether the Windows OpenSSH Authentication Agent
+    service is currently running.
+    """
+
+    try:
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                (
+                    "(Get-Service ssh-agent "
+                    "-ErrorAction SilentlyContinue).Status"
+                )
+            ],
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+
+        return result.stdout.strip().lower() == "running"
+
+    except Exception:
+        return False
+
+
+def update_agent_status():
+    running = is_ssh_agent_running()
+
+    if running:
+        agent_status_label.config(
+            text="●  SSH Agent: Running",
+            fg="#2ecc71"
+        )
+    else:
+        agent_status_label.config(
+            text="●  SSH Agent: Stopped",
+            fg="#e74c3c"
+        )
+
+
+def refresh_agent_status():
+    def worker():
+        running = is_ssh_agent_running()
+
+        root.after(
+            0,
+            lambda: apply_agent_status(running)
+        )
+
+    threading.Thread(
+        target=worker,
+        daemon=True
+    ).start()
+
+    root.after(
+        1500,
+        refresh_agent_status
+    )
+
+
+def apply_agent_status(running):
+    if running:
+        agent_status_label.config(
+            text="●  SSH Agent: Running",
+            fg="#2ecc71"
+        )
+    else:
+        agent_status_label.config(
+            text="●  SSH Agent: Stopped",
+            fg="#e74c3c"
+        )
+
+
+def start_ssh_agent():
+    """
+    Open a visible PowerShell window and run the SSH-agent
+    initialization commands.
+    """
+
+    command = r'''
+# Start Windows SSH Agent
+$service = Get-Service ssh-agent
+
+if ($service.StartType -ne "Automatic") {
+    Set-Service ssh-agent -StartupType Automatic
+}
+
+if ($service.Status -ne "Running") {
+    Start-Service ssh-agent
+}
+
+# SSH key
+$key = "$env:USERPROFILE\.ssh\harmony3_vps"
+
+# Check whether the key is already loaded
+$loaded = ssh-add -l 2>$null
+if ($loaded -notmatch [regex]::Escape((ssh-keygen -lf "$key.pub" | ForEach-Object { ($_ -split ' ')[1] }))) {
+    ssh-add $key
+}
+
+Write-Host ""
+Write-Host "SSH agent is ready. Harmony3 Docker access is ready." -ForegroundColor Green
+Write-Host ""
+Read-Host "Press Enter to close this window"
+'''
+
+    try:
+        subprocess.Popen(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-NoExit",
+                "-Command",
+                command
+            ]
+        )
+
+    except Exception as error:
+        messagebox.showerror(
+            "SSH Agent",
+            f"Could not open PowerShell.\n\n{error}"
+        )
+
+
+# ============================================================
 # GUI
 # ============================================================
 
 root = tk.Tk()
 
 root.title("Portainer Manager")
-root.geometry("420x245")
+root.geometry("460x330")
 root.resizable(False, False)
 
 root.update_idletasks()
@@ -127,8 +263,14 @@ height = root.winfo_height()
 x = (root.winfo_screenwidth() - width) // 2
 y = (root.winfo_screenheight() - height) // 2
 
-root.geometry(f"{width}x{height}+{x}+{y}")
+root.geometry(
+    f"{width}x{height}+{x}+{y}"
+)
 
+
+# ============================================================
+# Title
+# ============================================================
 
 title_label = tk.Label(
     root,
@@ -139,16 +281,58 @@ title_label = tk.Label(
 title_label.pack(pady=(18, 8))
 
 
+# ============================================================
+# SSH Agent section
+# ============================================================
+
+agent_frame = tk.Frame(root)
+
+agent_frame.pack(pady=(0, 15))
+
+
+agent_status_label = tk.Label(
+    agent_frame,
+    text="●  SSH Agent: Checking...",
+    font=("Segoe UI", 10)
+)
+
+agent_status_label.pack(
+    pady=(0, 7)
+)
+
+
+agent_button = tk.Button(
+    agent_frame,
+    text="Start SSH Agent",
+    width=28,
+    height=2,
+    command=start_ssh_agent
+)
+
+agent_button.pack()
+
+
+# ============================================================
+# Portainer status
+# ============================================================
+
 status_label = tk.Label(
     root,
     text="●  Checking...",
     font=("Segoe UI", 11)
 )
 
-status_label.pack(pady=(0, 18))
+status_label.pack(
+    pady=(0, 15)
+)
 
+
+# ============================================================
+# Tunnel buttons
+# ============================================================
 
 button_frame = tk.Frame(root)
+
 button_frame.pack()
 
 
@@ -180,6 +364,10 @@ stop_button.grid(
 )
 
 
+# ============================================================
+# Open Portainer
+# ============================================================
+
 open_button = tk.Button(
     root,
     text="Open Portainer",
@@ -187,11 +375,13 @@ open_button = tk.Button(
     height=2
 )
 
-open_button.pack(pady=18)
+open_button.pack(
+    pady=18
+)
 
 
 # ============================================================
-# Status
+# Portainer status
 # ============================================================
 
 def apply_status(pid):
@@ -202,9 +392,17 @@ def apply_status(pid):
             fg="#2ecc71"
         )
 
-        start_button.config(state="disabled")
-        stop_button.config(state="normal")
-        open_button.config(state="normal")
+        start_button.config(
+            state="disabled"
+        )
+
+        stop_button.config(
+            state="normal"
+        )
+
+        open_button.config(
+            state="normal"
+        )
 
     elif not starting:
 
@@ -213,9 +411,17 @@ def apply_status(pid):
             fg="#e74c3c"
         )
 
-        start_button.config(state="normal")
-        stop_button.config(state="disabled")
-        open_button.config(state="disabled")
+        start_button.config(
+            state="normal"
+        )
+
+        stop_button.config(
+            state="disabled"
+        )
+
+        open_button.config(
+            state="disabled"
+        )
 
 
 def refresh_status():
@@ -232,11 +438,16 @@ def refresh_status():
         daemon=True
     ).start()
 
-    root.after(1500, refresh_status)
+    root.after(
+        1500,
+        refresh_status
+    )
 
 
 def update_status():
-    apply_status(get_existing_tunnel_pid())
+    apply_status(
+        get_existing_tunnel_pid()
+    )
 
 
 # ============================================================
@@ -255,9 +466,17 @@ def start_tunnel():
 
     starting = True
 
-    start_button.config(state="disabled")
-    stop_button.config(state="disabled")
-    open_button.config(state="disabled")
+    start_button.config(
+        state="disabled"
+    )
+
+    stop_button.config(
+        state="disabled"
+    )
+
+    open_button.config(
+        state="disabled"
+    )
 
     status_label.config(
         text="●  Starting SSH tunnel...",
@@ -275,6 +494,7 @@ def start_tunnel_worker():
     global starting
 
     try:
+
         ssh = find_ssh()
 
         command = [
@@ -296,11 +516,15 @@ def start_tunnel_worker():
             creationflags=subprocess.CREATE_NO_WINDOW
         )
 
-        deadline = time.monotonic() + STARTUP_TIMEOUT
+        deadline = (
+            time.monotonic()
+            + STARTUP_TIMEOUT
+        )
 
         while time.monotonic() < deadline:
 
             if port_is_open():
+
                 starting = False
 
                 root.after(
@@ -312,7 +536,11 @@ def start_tunnel_worker():
 
             if tunnel_process.poll() is not None:
 
-                error = tunnel_process.stderr.read().strip()
+                error = (
+                    tunnel_process.stderr
+                    .read()
+                    .strip()
+                )
 
                 if not error:
                     error = (
@@ -334,28 +562,39 @@ def start_tunnel_worker():
 
                 return
 
-            time.sleep(CHECK_INTERVAL)
+            time.sleep(
+                CHECK_INTERVAL
+            )
 
         error = ""
 
         if tunnel_process is not None:
 
             try:
-                error = tunnel_process.stderr.read().strip()
+                error = (
+                    tunnel_process.stderr
+                    .read()
+                    .strip()
+                )
             except Exception:
                 pass
 
-            terminate_process(tunnel_process)
+            terminate_process(
+                tunnel_process
+            )
 
         tunnel_process = None
         starting = False
 
         if error:
+
             message = (
                 "SSH tunnel failed to start.\n\n"
                 + format_error(error)
             )
+
         else:
+
             message = (
                 "SSH tunnel did not become available "
                 f"within {STARTUP_TIMEOUT} seconds.\n\n"
@@ -400,6 +639,7 @@ def stop_tunnel():
         return
 
     try:
+
         subprocess.run(
             [
                 "taskkill",
@@ -457,6 +697,7 @@ def format_error(error):
     error = error.strip()
 
     if "Permission denied" in error:
+
         return (
             error
             + "\n\n"
@@ -466,6 +707,7 @@ def format_error(error):
         )
 
     if "Could not resolve hostname" in error:
+
         return (
             error
             + "\n\n"
@@ -474,6 +716,7 @@ def format_error(error):
         )
 
     if "bind" in error.lower():
+
         return (
             error
             + "\n\n"
@@ -482,6 +725,7 @@ def format_error(error):
         )
 
     if "Connection refused" in error:
+
         return (
             error
             + "\n\n"
@@ -489,6 +733,7 @@ def format_error(error):
         )
 
     if "Host key verification failed" in error:
+
         return (
             error
             + "\n\n"
@@ -505,9 +750,17 @@ def show_error(message):
         fg="#e74c3c"
     )
 
-    start_button.config(state="normal")
-    stop_button.config(state="disabled")
-    open_button.config(state="disabled")
+    start_button.config(
+        state="normal"
+    )
+
+    stop_button.config(
+        state="disabled"
+    )
+
+    open_button.config(
+        state="disabled"
+    )
 
     messagebox.showerror(
         "Portainer SSH Tunnel",
@@ -519,16 +772,31 @@ def show_error(message):
 # Button bindings
 # ============================================================
 
-start_button.config(command=start_tunnel)
-stop_button.config(command=stop_tunnel)
-open_button.config(command=open_portainer)
+start_button.config(
+    command=start_tunnel
+)
+
+stop_button.config(
+    command=stop_tunnel
+)
+
+open_button.config(
+    command=open_portainer
+)
 
 
 # ============================================================
 # Start
 # ============================================================
 
-root.after(100, refresh_status)
+root.after(
+    100,
+    refresh_status
+)
+
+root.after(
+    100,
+    refresh_agent_status
+)
 
 root.mainloop()
-
