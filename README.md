@@ -2,7 +2,7 @@
 
 An app for opening SSH tunnel to a server using preconfigured SSH Keys. The app starts or stops the Windows OpenSSH Authentication Agent which starts and maintains the SSH tunnels and port-forwarding used by the connection. The Portainer web interface of the server is mapped to a specific port and accesibble through localhost. [Portainer](https://github.com/portainer/portainer)
 
-*Useful for not having to activate tunnelling manually and for moderating Docker containers in the remote server*
+*Useful for not having to activate tunnelling manually and for moderating Docker containers in the remote server.*
 
 ## Requirements
 
