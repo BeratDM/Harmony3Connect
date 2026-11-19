@@ -41,6 +41,7 @@ The `SSH_HOST` and `LOCAL_PORT` environment variables are stored inside the pyw 
 You can open `harmony-portainer.pyw` directly if `.pyw` files are associated with Python on your system.
 
 Or from terminal:
+
 ```powershell
 python .\harmony-portainer.pyw
 ```
