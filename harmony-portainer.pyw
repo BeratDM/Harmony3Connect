@@ -8,7 +8,6 @@ from tkinter import messagebox
 import webbrowser
 import os
 
-
 # ============================================================
 # Configuration
 # ============================================================
@@ -36,6 +35,7 @@ starting = False
 # SSH helpers
 # ============================================================
 
+
 def find_ssh():
     ssh = shutil.which("ssh.exe") or shutil.which("ssh")
 
@@ -51,10 +51,7 @@ def find_ssh():
 
 def port_is_open(LOCAL_HOST, LOCAL_PORT):
     try:
-        with socket.create_connection(
-            (LOCAL_HOST, LOCAL_PORT),
-            timeout=0.5
-        ):
+        with socket.create_connection((LOCAL_HOST, LOCAL_PORT), timeout=0.5):
             return True
     except OSError:
         return False
@@ -74,14 +71,14 @@ def get_existing_tunnel_pid():
                     "Get-CimInstance Win32_Process "
                     "-Filter \"Name = 'ssh.exe'\" | "
                     "Where-Object { "
-                    "$_.CommandLine -like '*harmony3-portainer*' "
+                    f"$_.CommandLine -like '*{SSH_HOST}*' "
                     "} | "
                     "Select-Object -First 1 -ExpandProperty ProcessId"
-                )
+                ),
             ],
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
         pid = result.stdout.strip()
@@ -116,6 +113,7 @@ def terminate_process(process):
 # SSH Agent
 # ============================================================
 
+
 def is_ssh_agent_running():
     try:
         result = subprocess.run(
@@ -124,14 +122,11 @@ def is_ssh_agent_running():
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                (
-                    "(Get-Service ssh-agent "
-                    "-ErrorAction SilentlyContinue).Status"
-                )
+                ("(Get-Service ssh-agent " "-ErrorAction SilentlyContinue).Status"),
             ],
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
         return result.stdout.strip().lower() == "running"
@@ -142,52 +137,29 @@ def is_ssh_agent_running():
 
 def apply_agent_status(running):
     if running:
-        agent_status_label.config(
-            text="●  SSH Agent: Running",
-            fg="#2ecc71"
-        )
+        agent_status_label.config(text="●  SSH Agent: Running", fg="#2ecc71")
 
-        start_agent_button.config(
-            state="disabled"
-        )
+        start_agent_button.config(state="disabled")
 
-        stop_agent_button.config(
-            state="normal"
-        )
+        stop_agent_button.config(state="normal")
 
     else:
-        agent_status_label.config(
-            text="●  SSH Agent: Stopped",
-            fg="#e74c3c"
-        )
+        agent_status_label.config(text="●  SSH Agent: Stopped", fg="#e74c3c")
 
-        start_agent_button.config(
-            state="normal"
-        )
+        start_agent_button.config(state="normal")
 
-        stop_agent_button.config(
-            state="disabled"
-        )
+        stop_agent_button.config(state="disabled")
 
 
 def refresh_agent_status():
     def worker():
         running = is_ssh_agent_running()
 
-        root.after(
-            0,
-            lambda: apply_agent_status(running)
-        )
+        root.after(0, lambda: apply_agent_status(running))
 
-    threading.Thread(
-        target=worker,
-        daemon=True
-    ).start()
+    threading.Thread(target=worker, daemon=True).start()
 
-    root.after(
-        1500,
-        refresh_agent_status
-    )
+    root.after(1500, refresh_agent_status)
 
 
 def start_ssh_agent():
@@ -198,7 +170,7 @@ def start_ssh_agent():
 
     import tempfile
 
-    script = r'''
+    script = r"""
 $ErrorActionPreference = "Stop"
 
 try {
@@ -310,14 +282,12 @@ Write-Host "Press ENTER to close this window." -ForegroundColor Cyan
 Write-Host "========================================"
 
 Read-Host
-'''
+"""
 
     try:
         # Create a temporary PowerShell script.
         fd, script_path = tempfile.mkstemp(
-            suffix=".ps1",
-            prefix="harmony3_ssh_agent_",
-            text=True
+            suffix=".ps1", prefix="harmony3_ssh_agent_", text=True
         )
 
         with os.fdopen(fd, "w", encoding="utf-8") as file:
@@ -334,16 +304,14 @@ Read-Host
                     "-Verb RunAs "
                     "-ArgumentList "
                     f"'-NoProfile','-ExecutionPolicy','Bypass','-File','{script_path}'"
-                )
+                ),
             ]
         )
 
     except Exception as error:
         messagebox.showerror(
-            "SSH Agent",
-            f"Could not start elevated PowerShell.\n\n{error}"
+            "SSH Agent", f"Could not start elevated PowerShell.\n\n{error}"
         )
-
 
 
 def stop_ssh_agent():
@@ -352,7 +320,7 @@ def stop_ssh_agent():
     using an elevated PowerShell window.
     """
 
-    command = r'''
+    command = r"""
 try {
     Stop-Service ssh-agent -ErrorAction Stop
 
@@ -366,7 +334,7 @@ catch {
 }
 
 Write-Host ""
-'''
+"""
 
     try:
         subprocess.Popen(
@@ -382,19 +350,20 @@ Write-Host ""
                     "-ArgumentList "
                     "'-NoProfile','-ExecutionPolicy','Bypass','-Command',"
                     f"'{command.replace(chr(39), chr(39) + chr(39))}'"
-                )
+                ),
             ]
         )
 
     except Exception as error:
         messagebox.showerror(
-            "SSH Agent",
-            f"Could not start elevated PowerShell.\n\n{error}"
+            "SSH Agent", f"Could not start elevated PowerShell.\n\n{error}"
         )
+
 
 # ============================================================
 # Start tunnel
 # ============================================================
+
 
 def start_tunnel():
     print("=== START TUNNEL BUTTON CLICKED ===", flush=True)
@@ -407,28 +376,20 @@ def start_tunnel():
 
         print("About to start worker...", flush=True)
 
-        threading.Thread(
-            target=start_tunnel_worker,
-            daemon=True
-        ).start()
+        threading.Thread(target=start_tunnel_worker, daemon=True).start()
 
         print("Worker thread created.", flush=True)
 
     except Exception as error:
         print("START_TUNNEL ERROR:", repr(error), flush=True)
-        messagebox.showerror(
-            "Start Tunnel Error",
-            repr(error)
-        )
-
+        messagebox.showerror("Start Tunnel Error", repr(error))
 
 
 def start_tunnel_worker():
     global starting
 
     log_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "harmony3_tunnel.log"
+        os.path.dirname(os.path.abspath(__file__)), "harmony3_tunnel.log"
     )
 
     process = None
@@ -450,19 +411,21 @@ def start_tunnel_worker():
             log_write(f"ssh.exe: {ssh_path}")
 
             if not ssh_path:
-                raise RuntimeError(
-                    "ssh.exe could not be found."
-                )
+                raise RuntimeError("ssh.exe could not be found.")
 
             # Build command
             command = [
                 ssh_path,
                 "-N",
-                "-o", "BatchMode=yes",
-                "-o", "ExitOnForwardFailure=yes",
-                "-o", "ServerAliveInterval=30",
-                "-o", "ServerAliveCountMax=3",
-                "harmony3-portainer",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ExitOnForwardFailure=yes",
+                "-o",
+                "ServerAliveInterval=30",
+                "-o",
+                "ServerAliveCountMax=3",
+                SSH_HOST,
             ]
 
             log_write("")
@@ -492,9 +455,7 @@ def start_tunnel_worker():
 
                     stdout, stderr = process.communicate()
 
-                    log_write(
-                        f"SSH exited with code: {process.returncode}"
-                    )
+                    log_write(f"SSH exited with code: {process.returncode}")
 
                     log_write("")
                     log_write("STDOUT:")
@@ -510,29 +471,19 @@ def start_tunnel_worker():
                         or f"SSH exited with code {process.returncode}."
                     )
 
-                    raise RuntimeError(
-                        "SSH tunnel failed.\n\n"
-                        + error
-                    )
+                    raise RuntimeError("SSH tunnel failed.\n\n" + error)
 
                 # Check tunnel port
-                if port_is_open(
-                    LOCAL_HOST,
-                    LOCAL_PORT
-                ):
-                    log_write(
-                        f"Tunnel is listening on "
-                        f"{LOCAL_HOST}:{LOCAL_PORT}"
-                    )
+                if port_is_open(LOCAL_HOST, LOCAL_PORT):
+                    log_write(f"Tunnel is listening on " f"{LOCAL_HOST}:{LOCAL_PORT}")
 
                     log_write("SUCCESS")
 
                     root.after(
                         0,
                         lambda: status_label.config(
-                            text="●  Portainer tunnel: Running",
-                            fg="#2ecc71"
-                        )
+                            text="●  Portainer tunnel: Running", fg="#2ecc71"
+                        ),
                     )
 
                     return
@@ -556,16 +507,11 @@ def start_tunnel_worker():
             log_write("STDERR:")
             log_write(stderr or "(empty)")
 
-            error = (
-                stderr.strip()
-                or stdout.strip()
-                or "No SSH error was reported."
-            )
+            error = stderr.strip() or stdout.strip() or "No SSH error was reported."
 
             raise RuntimeError(
                 "SSH tunnel did not start within "
-                f"{STARTUP_TIMEOUT} seconds.\n\n"
-                + error
+                f"{STARTUP_TIMEOUT} seconds.\n\n" + error
             )
 
     except Exception as error:
@@ -573,11 +519,7 @@ def start_tunnel_worker():
         error_text = str(error)
 
         try:
-            with open(
-                log_path,
-                "a",
-                encoding="utf-8"
-            ) as log:
+            with open(log_path, "a", encoding="utf-8") as log:
                 log.write("")
                 log.write("\n=== PYTHON ERROR ===\n")
                 log.write(error_text)
@@ -588,20 +530,12 @@ def start_tunnel_worker():
         def show_tunnel_error():
             messagebox.showerror(
                 "Harmony3 Connect - SSH Tunnel",
-                error_text
-                + "\n\n"
-                + f"Full log:\n{log_path}"
+                error_text + "\n\n" + f"Full log:\n{log_path}",
             )
 
-            status_label.config(
-                text="●  Portainer tunnel: Stopped",
-                fg="#e74c3c"
-            )
+            status_label.config(text="●  Portainer tunnel: Stopped", fg="#e74c3c")
 
-        root.after(
-            0,
-            show_tunnel_error
-        )
+        root.after(0, show_tunnel_error)
 
     finally:
         starting = False
@@ -609,31 +543,24 @@ def start_tunnel_worker():
         def finish_ui():
             update_status()
 
-            start_button.config(
-                state="normal"
-            )
+            start_button.config(state="normal")
 
-            stop_button.config(
-                state="normal"
-            )
+            stop_button.config(state="normal")
 
-            open_button.config(
-                state="normal"
-            )
+            open_button.config(state="normal")
 
-        root.after(
-            0,
-            finish_ui
-        )
+        root.after(0, finish_ui)
+
 
 # ============================================================
 # Stop tunnel
 # ============================================================
 
+
 def stop_tunnel():
-    
+
     print("START_TUNNEL_WORKER CALLED", flush=True)
-    
+
     global tunnel_process
 
     pid = get_existing_tunnel_pid()
@@ -645,23 +572,14 @@ def stop_tunnel():
     try:
 
         subprocess.run(
-            [
-                "taskkill",
-                "/PID",
-                str(pid),
-                "/T",
-                "/F"
-            ],
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
             capture_output=True,
-            creationflags=subprocess.CREATE_NO_WINDOW
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
     except Exception as error:
 
-        messagebox.showerror(
-            "Stop failed",
-            str(error)
-        )
+        messagebox.showerror("Stop failed", str(error))
 
         return
 
@@ -676,25 +594,22 @@ def stop_tunnel():
 # Open Portainer
 # ============================================================
 
+
 def open_portainer():
 
     if get_existing_tunnel_pid() is None:
 
-        messagebox.showwarning(
-            "Tunnel is stopped",
-            "Start the Portainer tunnel first."
-        )
+        messagebox.showwarning("Tunnel is stopped", "Start the Portainer tunnel first.")
 
         return
 
-    webbrowser.open(
-        f"https://localhost:{LOCAL_PORT}"
-    )
+    webbrowser.open(f"https://localhost:{LOCAL_PORT}")
 
 
 # ============================================================
 # Error handling
 # ============================================================
+
 
 def format_error(error):
 
@@ -703,8 +618,7 @@ def format_error(error):
     if "Permission denied" in error:
 
         return (
-            error
-            + "\n\n"
+            error + "\n\n"
             "SSH authentication failed.\n"
             "Make sure harmony3_vps is loaded "
             "in ssh-agent."
@@ -712,65 +626,34 @@ def format_error(error):
 
     if "Could not resolve hostname" in error:
 
-        return (
-            error
-            + "\n\n"
-            "Check the harmony3-portainer entry "
-            "in your SSH config."
-        )
+        return error + "\n\n" f"Check the {SSH_HOST} entry " "in your SSH config."
 
     if "bind" in error.lower():
 
-        return (
-            error
-            + "\n\n"
-            f"Local port {LOCAL_PORT} may already "
-            "be in use."
-        )
+        return error + "\n\n" f"Local port {LOCAL_PORT} may already " "be in use."
 
     if "Connection refused" in error:
 
-        return (
-            error
-            + "\n\n"
-            "The VPS refused the SSH connection."
-        )
+        return error + "\n\n" "The VPS refused the SSH connection."
 
     if "Host key verification failed" in error:
 
-        return (
-            error
-            + "\n\n"
-            "The VPS host key could not be verified."
-        )
+        return error + "\n\n" "The VPS host key could not be verified."
 
     return error
 
 
 def show_error(message):
 
-    status_label.config(
-        text="●  Failed",
-        fg="#e74c3c"
-    )
+    status_label.config(text="●  Failed", fg="#e74c3c")
 
-    start_button.config(
-        state="normal"
-    )
+    start_button.config(state="normal")
 
-    stop_button.config(
-        state="disabled"
-    )
+    stop_button.config(state="disabled")
 
-    open_button.config(
-        state="disabled"
-    )
+    open_button.config(state="disabled")
 
-    messagebox.showerror(
-        f"{APP_NAME} - Error",
-        message
-    )
-
+    messagebox.showerror(f"{APP_NAME} - Error", message)
 
 
 # ============================================================
@@ -791,24 +674,16 @@ height = root.winfo_height()
 x = (root.winfo_screenwidth() - width) // 2
 y = (root.winfo_screenheight() - height) // 2
 
-root.geometry(
-    f"{width}x{height}+{x}+{y}"
-)
+root.geometry(f"{width}x{height}+{x}+{y}")
 
 
 # ============================================================
 # Title
 # ============================================================
 
-title_label = tk.Label(
-    root,
-    text=APP_NAME,
-    font=("Segoe UI", 16, "bold")
-)
+title_label = tk.Label(root, text=APP_NAME, font=("Segoe UI", 16, "bold"))
 
-title_label.pack(
-    pady=(18, 8)
-)
+title_label.pack(pady=(18, 8))
 
 
 # ============================================================
@@ -817,20 +692,14 @@ title_label.pack(
 
 agent_frame = tk.Frame(root)
 
-agent_frame.pack(
-    pady=(0, 15)
-)
+agent_frame.pack(pady=(0, 15))
 
 
 agent_status_label = tk.Label(
-    agent_frame,
-    text="●  SSH Agent: Checking...",
-    font=("Segoe UI", 10)
+    agent_frame, text="●  SSH Agent: Checking...", font=("Segoe UI", 10)
 )
 
-agent_status_label.pack(
-    pady=(0, 7)
-)
+agent_status_label.pack(pady=(0, 7))
 
 
 agent_button_frame = tk.Frame(agent_frame)
@@ -843,14 +712,10 @@ start_agent_button = tk.Button(
     text="Start SSH Agent",
     width=16,
     height=2,
-    command=start_ssh_agent
+    command=start_ssh_agent,
 )
 
-start_agent_button.grid(
-    row=0,
-    column=0,
-    padx=3
-)
+start_agent_button.grid(row=0, column=0, padx=3)
 
 
 stop_agent_button = tk.Button(
@@ -858,29 +723,19 @@ stop_agent_button = tk.Button(
     text="Stop SSH Agent",
     width=16,
     height=2,
-    command=stop_ssh_agent
+    command=stop_ssh_agent,
 )
 
-stop_agent_button.grid(
-    row=0,
-    column=1,
-    padx=3
-)
+stop_agent_button.grid(row=0, column=1, padx=3)
 
 
 # ============================================================
 # Portainer status
 # ============================================================
 
-status_label = tk.Label(
-    root,
-    text="●  Checking...",
-    font=("Segoe UI", 11)
-)
+status_label = tk.Label(root, text="●  Checking...", font=("Segoe UI", 11))
 
-status_label.pack(
-    pady=(0, 15)
-)
+status_label.pack(pady=(0, 15))
 
 
 # ============================================================
@@ -893,54 +748,33 @@ button_frame.pack()
 
 
 start_button = tk.Button(
-    button_frame,
-    text="Start",
-    width=13,
-    height=2,
-    command=start_tunnel
+    button_frame, text="Start", width=13, height=2, command=start_tunnel
 )
 
-start_button.grid(
-    row=0,
-    column=0,
-    padx=5
-)
+start_button.grid(row=0, column=0, padx=5)
 
 
 stop_button = tk.Button(
-    button_frame,
-    text="Stop",
-    width=13,
-    height=2,
-    command=stop_tunnel
+    button_frame, text="Stop", width=13, height=2, command=stop_tunnel
 )
 
-stop_button.grid(
-    row=0,
-    column=1,
-    padx=5
-)
+stop_button.grid(row=0, column=1, padx=5)
 
 # ============================================================
 # Open Portainer
 # ============================================================
 
 open_button = tk.Button(
-    root,
-    text="Open Portainer",
-    width=29,
-    height=2,
-    command=open_portainer
+    root, text="Open Portainer", width=29, height=2, command=open_portainer
 )
 
-open_button.pack(
-    pady=18
-)
+open_button.pack(pady=18)
 
 
 # ============================================================
 # Tunnel status
 # ============================================================
+
 
 def apply_status(pid):
 
@@ -948,39 +782,24 @@ def apply_status(pid):
 
         status_label.config(
             text=f"●  Portainer tunnel is running  (PID {pid}) (PORT:{LOCAL_PORT})",
-            fg="#2ecc71"
+            fg="#2ecc71",
         )
 
-        start_button.config(
-            state="disabled"
-        )
+        start_button.config(state="disabled")
 
-        stop_button.config(
-            state="normal"
-        )
+        stop_button.config(state="normal")
 
-        open_button.config(
-            state="normal"
-        )
+        open_button.config(state="normal")
 
     elif not starting:
 
-        status_label.config(
-            text="●  Portainer tunnel is stopped",
-            fg="#e74c3c"
-        )
+        status_label.config(text="●  Portainer tunnel is stopped", fg="#e74c3c")
 
-        start_button.config(
-            state="normal"
-        )
+        start_button.config(state="normal")
 
-        stop_button.config(
-            state="disabled"
-        )
+        stop_button.config(state="disabled")
 
-        open_button.config(
-            state="disabled"
-        )
+        open_button.config(state="disabled")
 
 
 def refresh_status():
@@ -989,40 +808,23 @@ def refresh_status():
 
         pid = get_existing_tunnel_pid()
 
-        root.after(
-            0,
-            lambda: apply_status(pid)
-        )
+        root.after(0, lambda: apply_status(pid))
 
-    threading.Thread(
-        target=worker,
-        daemon=True
-    ).start()
+    threading.Thread(target=worker, daemon=True).start()
 
-    root.after(
-        1500,
-        refresh_status
-    )
+    root.after(1500, refresh_status)
 
 
 def update_status():
-    apply_status(
-        get_existing_tunnel_pid()
-    )
+    apply_status(get_existing_tunnel_pid())
 
 
 # ============================================================
 # Start
 # ============================================================
 
-root.after(
-    100,
-    refresh_status
-)
+root.after(100, refresh_status)
 
-root.after(
-    100,
-    refresh_agent_status
-)
+root.after(100, refresh_agent_status)
 
 root.mainloop()
